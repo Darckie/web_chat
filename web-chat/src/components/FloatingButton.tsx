@@ -7,16 +7,18 @@ import { useChatStore } from "../store/chatStore"
 export const FloatingButton = () => {
   const { isMinimized, toggleMinimize } = useUIStore()
   
-  const { chats, activateChat, activeChats } = useChatStore()
+  const { chats, activeChats, activateTab, setSelectedChat } = useChatStore();
 
   const handleClick = () => {
-    console.log(isMinimized)
     if (isMinimized) {
-      toggleMinimize()
-    } else if (activeChats.length === 0) {
-      activateChat(chats[0].id)
+      toggleMinimize();
+    } else if (activeChats.length === 0 && chats.length > 0) {
+      const firstChatId = chats[0].id;
+      setSelectedChat(firstChatId); // mark it as selected
+      activateTab(firstChatId);      // add to active chats
     }
-  }
+  };
+  
 
   return (
     <button

@@ -1,282 +1,3 @@
-// "use client";
-
-// import { useEffect, useState } from "react";
-// import {
-//     Table, TableBody, TableCell, TableHead,
-//     TableHeader, TableRow
-// } from "../components/ui/table";
-
-// import { Button } from "../components/ui/button";
-// import { Input } from "../components/ui/input";
-// import type { ColumnDef, SortingState } from "@tanstack/react-table";
-// import {
-//     flexRender,
-//     getCoreRowModel,
-//     getSortedRowModel,
-//     useReactTable,
-// } from "@tanstack/react-table";
-
-// import {
-//     ArrowUpDown,
-//     MessageCircleReply,
-//     Send
-// } from "lucide-react";
-
-// import {
-//     Select, SelectTrigger, SelectValue,
-//     SelectContent, SelectItem
-// } from "../components/ui/select";
-
-// import { useChatStore } from "../store/chatStore";
-// import { useAuthStore } from "../store/auth";
-
-
-// // ---------------------- Types ----------------------
-// export type ChatHistoryItem = {
-//     id: string;
-//     chat: string;
-//     name: string;
-//     number: string;
-//     template: string;
-//     status: string;
-//     message: string;
-//     created_at: string;
-// };
-
-// // ---------------------- Styles ----------------------
-// const btnStyle = {
-//     textTransform: "none",
-//     fontFamily: "system-ui",
-//     borderRadius: "6px",
-//     paddingInline: "18px",
-//     paddingBlock: "6px",
-//     fontSize: "14px",
-//     fontWeight: 600,
-//     backgroundColor: "rgba(0,128,0,0.08)",
-//     color: "#2E7D32",
-//     display: "flex",
-//     gap: "8px",
-//     cursor: "pointer",
-// };
-
-// // ---------------------- Open chat window ----------------------
-// const fncTOopenChatWindow = (item: ChatHistoryItem) => {
-//     useChatStore.getState().openChat(item.chat, item.number);
-// };
-
-// // ---------------------- Table Columns ----------------------
-// const columns: ColumnDef<ChatHistoryItem>[] = [
-//     {
-//         accessorKey: "chat",
-//         header: () => "Chat",
-//         cell: ({ row }) => {
-//             const item = row.original;
-//             return (
-//                 <MessageCircleReply
-//                     className="text-green-500 cursor-pointer"
-//                     onClick={() => fncTOopenChatWindow(item)}
-//                     size={18}
-//                 />
-//             );
-//         },
-//     },
-//     {
-//         accessorKey: "name",
-//         header: ({ column }) => (
-//             <Button variant="ghost" onClick={() => column.toggleSorting()}>
-//                 Name <ArrowUpDown size={14} />
-//             </Button>
-//         ),
-//     },
-//     { accessorKey: "number", header: () => "Number" },
-//     { accessorKey: "template", header: () => "Template" },
-//     {
-//         accessorKey: "status",
-//         header: () => "Status",
-//         cell: ({ row }) => {
-//             const s = row.original.status;
-//             const color =
-//                 s === "sent"
-//                     ? "text-blue-500"
-//                     : s === "delivered"
-//                     ? "text-green-500"
-//                     : s === "read"
-//                     ? "text-purple-500"
-//                     : "text-red-500";
-//             return <span className={color}>{s}</span>;
-//         },
-//     },
-//     { accessorKey: "created_at", header: () => "Date" },
-// ];
-
-// // ================================================================
-// //                MAIN COMPONENT START
-// // ================================================================
-// export default function ChatHistoryTable() {
-//     const [data, setData] = useState<ChatHistoryItem[]>([]);
-//     const [sorting, setSorting] = useState<SortingState>([]);
-//     const [name, setName] = useState("");
-//     const [number, setNumber] = useState("");
-//     const [template, setTemplate] = useState("");
-
-//     const [templates, setTemplates] = useState<string[]>([]);
-//     // const AGENT_ID = "AGT001"; // later you pass dynamically
-//     const AGENT_ID=useAuthStore((s)=>s.agentId)
-
-//     // ---------------------- Fetch templates ----------------------
-//     useEffect(() => {
-//         fetch("http://localhost:3000/api/chat/get-template")
-//             .then((r) => r.json())
-//             .then((data) => setTemplates(data.templates || []));
-//     }, []);
-
-//     // ---------------------- Fetch History From DB (Agent Based) ----------------------
-//     useEffect(() => {
-//         fetch(`http://localhost:3000/api/chat/history?agent_id=${AGENT_ID}`)
-//             .then((r) => r.json())
-//             .then((res) => {
-//                 if (!res.success) return;
-//                 const rows = res.data;
-
-//                 // Convert DB → table structure
-//                 const mapped: ChatHistoryItem[] = rows.map((row: any) => ({
-//                     id: String(row.id),
-//                     chat: row.mobile_no, // chatId = mobile number
-//                     name: row.customer_name || "Unknown",
-//                     number: row.mobile_no,
-//                     template: row.action || "-",
-//                     status: row.status || "sent",
-//                     message: row.message,
-//                     created_at: new Date(row.update_time || row.api_call_time).toLocaleString(),
-//                 }));
-
-//                 setData(mapped);
-//             });
-//     }, []);
-
-//     // ---------------------- Send Template Message ----------------------
-//     const sendMessage = () => {
-//         if (!name || !number || !template) return alert("Fill all fields");
-
-//         fetch("http://localhost:3000/api/chats/send-template", {
-//             method: "POST",
-//             headers: { "Content-Type": "application/json" },
-//             body: JSON.stringify({
-//                 agent_id: AGENT_ID,
-//                 customer_name: name,
-//                 mobile_no: number,
-//                 template_name: template,
-//             }),
-//         });
-
-//         // update UI instantly
-//         setData((prev) => [
-//             {
-//                 id: String(Date.now()),
-//                 chat: number,
-//                 name,
-//                 number,
-//                 template,
-//                 status: "sent",
-//                 message: template,
-//                 created_at: new Date().toLocaleString(),
-//             },
-//             ...prev,
-//         ]);
-
-//         setName("");
-//         setNumber("");
-//         setTemplate("");
-//     };
-
-//     // ---------------------- Table Setup ----------------------
-//     const table = useReactTable({
-//         data,
-//         columns,
-//         getCoreRowModel: getCoreRowModel(),
-//         getSortedRowModel: getSortedRowModel(),
-//         onSortingChange: setSorting,
-//         state: { sorting },
-//     });
-
-//     return (
-//         <div className="p-4 space-y-4">
-
-//             {/* ---------------------- SEND TEMPLATE UI ---------------------- */}
-//             <div className="grid grid-cols-4 gap-4 bg-white shadow-sm p-4 rounded-sm">
-//                 <Input
-//                     placeholder="Customer Name"
-//                     value={name}
-//                     onChange={(e) => setName(e.target.value)}
-//                 />
-//                 <Input
-//                     placeholder="Phone Number"
-//                     value={number}
-//                     onChange={(e) => setNumber(e.target.value)}
-//                 />
-
-//                 <Select value={template} onValueChange={setTemplate}>
-//                     <SelectTrigger className="h-10">
-//                         <SelectValue placeholder="Select Template" />
-//                     </SelectTrigger>
-//                     <SelectContent>
-//                         {templates.map((t) => (
-//                             <SelectItem key={t} value={t}>
-//                                 {t}
-//                             </SelectItem>
-//                         ))}
-//                     </SelectContent>
-//                 </Select>
-
-//                 <Button
-//                     style={btnStyle}
-//                     className="bg-green-100 text-green-800 hover:bg-green-200"
-//                     onClick={sendMessage}
-//                 >
-//                     <Send />
-//                     Send
-//                 </Button>
-//             </div>
-
-//             {/* ---------------------- CHAT TABLE ---------------------- */}
-//             <Table className="border bg-white">
-//                 <TableHeader className="bg-blue-50">
-//                     {table.getHeaderGroups().map((group) => (
-//                         <TableRow key={group.id}>
-//                             {group.headers.map((header) => (
-//                                 <TableHead key={header.id}>
-//                                     {flexRender(header.column.columnDef.header, header.getContext())}
-//                                 </TableHead>
-//                             ))}
-//                         </TableRow>
-//                     ))}
-//                 </TableHeader>
-
-//                 <TableBody>
-//                     {table.getRowModel().rows.length ? (
-//                         table.getRowModel().rows.map((row) => (
-//                             <TableRow key={row.id}>
-//                                 {row.getVisibleCells().map((cell) => (
-//                                     <TableCell key={cell.id}>
-//                                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
-//                                     </TableCell>
-//                                 ))}
-//                             </TableRow>
-//                         ))
-//                     ) : (
-//                         <TableRow>
-//                             <TableCell colSpan={columns.length} className="text-center py-6">
-//                                 No chats found for this agent.
-//                             </TableCell>
-//                         </TableRow>
-//                     )}
-//                 </TableBody>
-//             </Table>
-//             {/* <ChatWidget/> */}
-//         </div>
-//     );
-// }
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -293,18 +14,21 @@ import {
     DialogTitle, DialogFooter
 } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
-import type { ColumnDef, SortingState } from "@tanstack/react-table";
+import type { ColumnDef, SortingState, PaginationState } from "@tanstack/react-table";
 import {
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
+    getPaginationRowModel,
     useReactTable,
 } from "@tanstack/react-table";
 
 import {
     ArrowUpDown,
     MessageCircleReply,
-    Send
+    Send,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react";
 
 import {
@@ -354,6 +78,7 @@ const btnStyle = {
 // ---------------------- Open chat window ----------------------
 const fncTOopenChatWindow = (item: ChatHistoryItem) => {
     useChatStore.getState().openChat(item.chat, item.number);
+    
 };
 
 // ---------------------- Table Columns ----------------------
@@ -404,9 +129,17 @@ const columns: ColumnDef<ChatHistoryItem>[] = [
 // ================================================================
 //                MAIN COMPONENT START
 // ================================================================
+const apiUrl = import.meta.env.VITE_API_URL;
+
+
+
 export default function ChatHistoryTable() {
     const [data, setData] = useState<ChatHistoryItem[]>([]);
     const [sorting, setSorting] = useState<SortingState>([]);
+    const [pagination, setPagination] = useState<PaginationState>({
+        pageIndex: 0,
+        pageSize: 5,
+    });
     const [name, setName] = useState("");
     const [number, setNumber] = useState("");
 
@@ -424,7 +157,7 @@ export default function ChatHistoryTable() {
 
     // ---------------------- Fetch templates ----------------------
     const fetchTemplates = () => {
-        fetch("http://localhost:3000/api/chat/get-template")
+        fetch(apiUrl + "/get-template")
             .then((r) => r.json())
             .then((data) => {
                 if (data.success && data.templates) {
@@ -435,7 +168,7 @@ export default function ChatHistoryTable() {
     }
 
     const fetchHistory = () => {
-        fetch(`http://localhost:3000/api/chat/history?agent_id=${AGENT_ID}`)
+        fetch(`${apiUrl}/history?agent_id=${AGENT_ID}`)
             .then((r) => r.json())
             .then((res) => {
                 if (!res.success) return;
@@ -458,6 +191,7 @@ export default function ChatHistoryTable() {
             .catch(err => console.error("Error fetching history:", err));
     }
     useEffect(() => {
+        console.log("API URL:", apiUrl);
         fetchTemplates();
         fetchHistory()
     }, []);
@@ -470,13 +204,16 @@ export default function ChatHistoryTable() {
 
     // ---------------------- Send Message (Text or Template) ----------------------
     const sendMessage = () => {
+        if (number.length != 10) {
+            alert("please enter a valid number");
+        }
         if (!name || !number) return alert("Please enter name and number");
 
         if (messageType === "text") {
             // Send text message
             if (!textMessage.trim()) return alert("Please enter a message");
 
-            fetch("http://localhost:3000/api/chat/send", {
+            fetch(apiUrl + "/send", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -488,20 +225,7 @@ export default function ChatHistoryTable() {
                 }),
             });
 
-            // Update UI
-            // setData((prev) => [
-            //     {
-            //         id: String(Date.now()),
-            //         chat: number,
-            //         name,
-            //         number,
-            //         template: "Text Message",
-            //         status: "sent",
-            //         message: textMessage,
-            //         created_at: new Date().toLocaleString(),
-            //     },
-            //     ...prev,
-            // ]);
+
             fetchHistory()
 
             setName("");
@@ -538,22 +262,7 @@ export default function ChatHistoryTable() {
             }),
         });
 
-        // Update UI
-        // setData((prev) => [
-        //     {
-        //         id: String(Date.now()),
-        //         chat: number,
-        //         name,
-        //         number,
-        //         template: templateName,
-        //         status: "sent",
-        //         message: templateName,
-        //         created_at: new Date().toLocaleString(),
-        //     },
-        //     ...prev,
-        // ]);
 
-        // Reset form
         setName("");
         setNumber("");
         setSelectedTemplate("");
@@ -579,8 +288,10 @@ export default function ChatHistoryTable() {
         columns,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
         onSortingChange: setSorting,
-        state: { sorting },
+        onPaginationChange: setPagination,
+        state: { sorting, pagination },
     });
 
     return (
@@ -697,39 +408,76 @@ export default function ChatHistoryTable() {
             </Dialog>
 
             {/* ---------------------- CHAT TABLE ---------------------- */}
-            <Table className="border bg-white">
-                <TableHeader className="bg-blue-50">
-                    {table.getHeaderGroups().map((group) => (
-                        <TableRow key={group.id}>
-                            {group.headers.map((header) => (
-                                <TableHead key={header.id}>
-                                    {flexRender(header.column.columnDef.header, header.getContext())}
-                                </TableHead>
-                            ))}
-                        </TableRow>
-                    ))}
-                </TableHeader>
-
-                <TableBody>
-                    {table.getRowModel().rows.length ? (
-                        table.getRowModel().rows.map((row) => (
-                            <TableRow key={row.id}>
-                                {row.getVisibleCells().map((cell) => (
-                                    <TableCell key={cell.id}>
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </TableCell>
+            <div className="bg-white rounded-sm">
+                <Table className="border">
+                    <TableHeader className="bg-blue-50">
+                        {table.getHeaderGroups().map((group) => (
+                            <TableRow key={group.id}>
+                                {group.headers.map((header) => (
+                                    <TableHead key={header.id}>
+                                        {flexRender(header.column.columnDef.header, header.getContext())}
+                                    </TableHead>
                                 ))}
                             </TableRow>
-                        ))
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={columns.length} className="text-center py-6">
-                                No chats found for this agent.
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                        ))}
+                    </TableHeader>
+
+                    <TableBody>
+                        {table.getRowModel().rows.length ? (
+                            table.getRowModel().rows.map((row) => (
+                                <TableRow key={row.id}>
+                                    {row.getVisibleCells().map((cell) => (
+                                        <TableCell key={cell.id}>
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={columns.length} className="text-center py-6">
+                                    No chats found for this agent.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+
+                {/* ---------------------- PAGINATION CONTROLS ---------------------- */}
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                    <div className="text-sm text-gray-600">
+                        Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
+                        {Math.min(
+                            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                            table.getFilteredRowModel().rows.length
+                        )}{" "}
+                        of {table.getFilteredRowModel().rows.length} entries
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => table.previousPage()}
+                            disabled={!table.getCanPreviousPage()}
+                            className="h-8 w-8 p-0"
+                        >
+                            <ChevronLeft size={16} />
+                        </Button>
+                        <div className="text-sm font-medium">
+                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => table.nextPage()}
+                            disabled={!table.getCanNextPage()}
+                            className="h-8 w-8 p-0"
+                        >
+                            <ChevronRight size={16} />
+                        </Button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

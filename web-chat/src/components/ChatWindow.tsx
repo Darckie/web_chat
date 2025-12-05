@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useChatStore } from "../store/chatStore";
 import { useUIStore } from "../store/uiStore";
 import { useResize } from "../hooks/useResize";
 import { useDrag } from "../hooks/useDrag";
-import {  MessageCircleCode,  Minimize2,  MinimizeIcon } from "lucide-react";
+import { MessageCircleCode, Minimize2 } from "lucide-react";
 
 import { ChatTabs } from "./ChatTabs";
 import { ChatHeader } from "./ChatHeader";
@@ -13,11 +13,22 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 
 export const ChatWindow = () => {
-  const { chats, activeChats, activateChat, deactivateChat } = useChatStore();
+  const { chats, activeChats, activateTab, deactivateTab } = useChatStore();
   const { isMinimized, minimize, width, height } = useUIStore();
 
+  // ---------------------------
+  // FIXED: selected chat state
+  // ---------------------------
   const [selectedChatId, setSelectedChatId] = useState(activeChats[0] || "");
 
+  useEffect(() => {
+    if (activeChats.length > 0) {
+      setSelectedChatId(activeChats[0]); // AUTO UPDATE ON CHAT OPEN
+    }
+  }, [activeChats]);
+
+
+  
   const windowRef:any = useRef<HTMLDivElement>(null);
   const { handleMouseDown: handleResize } = useResize(windowRef);
   const { handleDragStart } = useDrag(windowRef);
@@ -27,11 +38,11 @@ export const ChatWindow = () => {
 
   const handleSelectChat = (chatId: string) => {
     setSelectedChatId(chatId);
-    activateChat(chatId);
+    activateTab(chatId);
   };
 
   const handleCloseChat = () => {
-    deactivateChat(selectedChatId);
+    deactivateTab(selectedChatId);
     const remaining = activeChats.filter((id) => id !== selectedChatId);
     if (remaining.length > 0) setSelectedChatId(remaining[0]);
   };
@@ -50,32 +61,25 @@ export const ChatWindow = () => {
         position: "fixed",
       }}
     >
-      {/* Header for dragging */}
+      {/* ------------------- HEADER / DRAG HANDLE ------------------- */}
       <div
         data-drag-handle
         onMouseDown={handleDragStart}
         className="flex items-center justify-between p-1 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 cursor-move"
       >
-        <h2 className="text-sm font-bold text-gray-900"><MessageCircleCode className="text-teal-700"/></h2>
+        <h2 className="text-sm font-bold text-gray-900">
+          <MessageCircleCode className="text-teal-700" />
+        </h2>
 
-        <div className="flex items-center gap-1">
-          {/* <button onClick={maximize} className="p-1.5 rounded-full hover:bg-gray-200 transition-colors">
-            {useUIStore.getState().isMaximized ? (
-              <Minimize2 size={16} className="text-gray-600" />
-            ) : (
-              <Maximize2 size={16} className="text-gray-600" />
-            )}
-          </button> */}
-
-          <button 
-            onClick={minimize} 
-            className="p-1.5 rounded-full hover:bg-gray-200 cursor-pointer transition-colors text-gray-600"
-          >
-            <Minimize2/>
-          </button>
-        </div>
+        <button
+          onClick={minimize}
+          className="p-1.5 rounded-full hover:bg-gray-200 cursor-pointer transition-colors text-gray-600"
+        >
+          <Minimize2 />
+        </button>
       </div>
 
+      {/* ------------------- TABS ------------------- */}
       {activeChats.length > 0 && (
         <ChatTabs
           activeChats={activeChats}
@@ -85,19 +89,19 @@ export const ChatWindow = () => {
         />
       )}
 
+      {/* ------------------- CHAT CONTENT ------------------- */}
       <ChatHeader chat={selectedChat} onClose={handleCloseChat} />
 
       <MessageList chat={selectedChat} />
 
-      <ChatInput chatId={selectedChat.id}  mobile_no={selectedChat.mobile_no} />
+      <ChatInput chatId={selectedChat.id} mobile_no={selectedChat.mobile_no} />
 
-      {/* Resize Handle */}
+      {/* ------------------- RESIZER ------------------- */}
       <div
         onMouseDown={handleResize}
         title="resize"
-        className="absolute  bottom-0 right-0 w-4 h-4 cursor-nwse-resize bg-gradient-to-tl from-blue-800 to-transparent rounded-tl-lg  hover:opacity-100 transition-opacity"
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize bg-gradient-to-tl from-blue-800 to-transparent rounded-tl-lg hover:opacity-100 transition-opacity"
       />
-
     </div>
   );
 };

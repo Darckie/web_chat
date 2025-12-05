@@ -44,7 +44,7 @@ interface UIStore extends UIState {
   setPrevSize: (size: { width: number; height: number } | null) => void
 }
 
-export const useUIStore = create<UIStore>((set, get) => ({
+export const useUIStore = create<UIStore>((set) => ({
   isMinimized: false,
   isMaximized: false,
   width: 350,

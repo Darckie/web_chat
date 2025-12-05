@@ -12,7 +12,7 @@ interface ChatTabsProps {
 }
 
 export const ChatTabs = ({ activeChats, chats, onSelectChat, selectedChatId }: ChatTabsProps) => {
-  const { deactivateChat } = useChatStore()
+  const { deactivateTab } = useChatStore()
 
   const activeChatObjects = chats.filter((chat) => activeChats.includes(chat.id))
 
@@ -22,18 +22,17 @@ export const ChatTabs = ({ activeChats, chats, onSelectChat, selectedChatId }: C
         <div
           key={chat.id}
           onClick={() => onSelectChat(chat.id)}
-          className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-all duration-200 whitespace-nowrap min-w-max ${
-            selectedChatId === chat.id
+          className={`flex items-center gap-2 px-1 py-2 cursor-pointer transition-all duration-200 whitespace-nowrap w-24 min-w-[110px] ${selectedChatId === chat.id
               ? "bg-white border-b-2 border-blue-500 text-blue-500"
               : "text-gray-600 hover:bg-white/50"
-          }`}
+            }`}
         >
-         <User2/>
+          <User2 />
           <span className="text-xs font-medium truncate max-w-[80px]">{chat.name}</span>
           <button
             onClick={(e) => {
               e.stopPropagation()
-              deactivateChat(chat.id)
+              deactivateTab(chat.id)
             }}
             className="p-0.5 rounded-full hover:bg-gray-200 transition-colors"
           >

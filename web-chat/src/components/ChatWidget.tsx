@@ -1,11 +1,11 @@
 "use client"
 import { ChatWindow } from "./ChatWindow"
 import { FloatingButton } from "./FloatingButton"
-import { useWebSocket } from "../hooks/useWebSocket"
+// import { useWebSocket } from "../hooks/useWebSocket"
 import { useChatStore } from "../store/chatStore"
 
 export const ChatWidget = () => {
-  useWebSocket()
+  // useWebSocket()
   const { activeChats } = useChatStore()
 
   return (

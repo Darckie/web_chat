@@ -1,6 +1,6 @@
 "use client"
 
-import { X, MoreVertical, Phone, Video, User } from "lucide-react"
+import {  MoreVertical,  User } from "lucide-react"
 import type { Chat } from "../types/index"
 
 interface ChatHeaderProps {
@@ -8,7 +8,7 @@ interface ChatHeaderProps {
   onClose: () => void
 }
 
-export const ChatHeader = ({ chat, onClose }: ChatHeaderProps) => {
+export const ChatHeader = ({ chat }: ChatHeaderProps) => {
   const getStatusColor = (status: string) => {
     return status === "online" ? "bg-green-500" : "bg-gray-400"
   }
