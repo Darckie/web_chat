@@ -28,7 +28,8 @@ import {
     MessageCircleReply,
     Send,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Info
 } from "lucide-react";
 
 import {
@@ -38,7 +39,6 @@ import {
 
 import { useChatStore } from "../store/chatStore";
 import { useAuthStore } from "../store/auth";
-
 
 // ---------------------- Types ----------------------
 export type ChatHistoryItem = {
@@ -52,16 +52,23 @@ export type ChatHistoryItem = {
     created_at: string;
 };
 
+type TemplateButton = {
+    type: string;
+    text: string;
+};
+
 type TemplateInfo = {
     name: string;
     language: string;
     status: string;
     placeholders: string[];
+    buttons: TemplateButton[];
+    category: string;
 };
 
 // ---------------------- Styles ----------------------
 const btnStyle = {
-    textTransform: "none",
+    textTransform: "none" as const,
     fontFamily: "system-ui",
     borderRadius: "6px",
     paddingInline: "18px",
@@ -78,7 +85,6 @@ const btnStyle = {
 // ---------------------- Open chat window ----------------------
 const fncTOopenChatWindow = (item: ChatHistoryItem) => {
     useChatStore.getState().openChat(item.chat, item.number);
-    
 };
 
 // ---------------------- Table Columns ----------------------
@@ -131,8 +137,6 @@ const columns: ColumnDef<ChatHistoryItem>[] = [
 // ================================================================
 const apiUrl = import.meta.env.VITE_API_URL;
 
-
-
 export default function ChatHistoryTable() {
     const [data, setData] = useState<ChatHistoryItem[]>([]);
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -152,29 +156,76 @@ export default function ChatHistoryTable() {
     const [templates, setTemplates] = useState<TemplateInfo[]>([]);
     const [showPlaceholderDialog, setShowPlaceholderDialog] = useState(false);
     const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
+    const [selectedTemplateData, setSelectedTemplateData] = useState<TemplateInfo | null>(null);
 
     const AGENT_ID = useAuthStore((s) => s.agentId);
+
+    // ---------------------- Extract Placeholders from Template Body ----------------------
+    const extractPlaceholders = (bodyText: string): string[] => {
+        const placeholderPattern = /\{\{(\d+)\}\}/g;
+        const matches = bodyText.matchAll(placeholderPattern);
+        const placeholders: string[] = [];
+        
+        for (const match of matches) {
+            const index = parseInt(match[1]);
+            placeholders.push(`variable_${index}`);
+        }
+        
+        return placeholders;
+    };
 
     // ---------------------- Fetch templates ----------------------
     const fetchTemplates = () => {
         fetch(apiUrl + "/get-template")
             .then((r) => r.json())
             .then((data) => {
+                console.log("Template data:", data);
                 if (data.success && data.templates) {
-                    setTemplates(data.templates);
+                    // CHANGE 1: Extract buttons from raw.structure.buttons
+                    const mappedTemplates: TemplateInfo[] = data.templates.map((t: any) => {
+                        let placeholders: string[] = [];
+                        let buttons: TemplateButton[] = [];
+                        
+                        // Extract placeholders from body text if structure exists
+                        if (t.raw?.structure?.body?.text) {
+                            placeholders = extractPlaceholders(t.raw.structure.body.text);
+                        }
+                        
+                        // CHANGE 1: Extract buttons from raw.structure.buttons
+                        if (t.raw?.structure?.buttons && Array.isArray(t.raw.structure.buttons)) {
+                            buttons = t.raw.structure.buttons;
+                        }
+                        
+                        return {
+                            name: t.name,
+                            language: t.language,
+                            status: t.raw?.status || t.status || "UNKNOWN",
+                            placeholders: placeholders,
+                            buttons: buttons, // Now correctly extracted
+                            category: t.category || "MARKETING",
+                        };
+                    });
+                    
+                    console.log("Mapped templates:", mappedTemplates);
+                    setTemplates(mappedTemplates);
+                } else {
+                    setTemplates([]);
                 }
             })
-            .catch(err => console.error("Error fetching templates:", err));
-    }
+            .catch(err => {
+                console.error("Error fetching templates:", err);
+                setTemplates([]);
+            });
+    };
 
     const fetchHistory = () => {
+        console.log("Fetching conversation history!");
         fetch(`${apiUrl}/history?agent_id=${AGENT_ID}`)
             .then((r) => r.json())
             .then((res) => {
                 if (!res.success) return;
                 const rows = res.data;
 
-                // Convert DB → table structure
                 const mapped: ChatHistoryItem[] = rows.map((row: any) => ({
                     id: String(row.id),
                     chat: row.mobile_no,
@@ -189,28 +240,33 @@ export default function ChatHistoryTable() {
                 setData(mapped);
             })
             .catch(err => console.error("Error fetching history:", err));
-    }
+    };
+
     useEffect(() => {
-        console.log("API URL:", apiUrl);
         fetchTemplates();
-        fetchHistory()
+        fetchHistory();
+        const intervalId = setInterval(() => {
+            fetchHistory();
+        }, 20000);
+
+        return () => clearInterval(intervalId);
     }, []);
 
-    // ---------------------- Fetch History From DB (Agent Based) ----------------------
     useEffect(() => {
-
-
+        if (AGENT_ID) {
+            fetchHistory();
+        }
     }, [AGENT_ID]);
 
     // ---------------------- Send Message (Text or Template) ----------------------
     const sendMessage = () => {
-        if (number.length != 10) {
-            alert("please enter a valid number");
+        if (number.length !== 10) {
+            alert("Please enter a valid 10-digit number");
+            return;
         }
         if (!name || !number) return alert("Please enter name and number");
 
         if (messageType === "text") {
-            // Send text message
             if (!textMessage.trim()) return alert("Please enter a message");
 
             fetch(apiUrl + "/send", {
@@ -223,26 +279,25 @@ export default function ChatHistoryTable() {
                     text: textMessage,
                     type: 'text'
                 }),
-            });
-
-
-            fetchHistory()
-
-            setName("");
-            setNumber("");
-            setTextMessage("");
+            })
+            .then(() => {
+                fetchHistory();
+                setName("");
+                setNumber("");
+                setTextMessage("");
+            })
+            .catch(err => console.error("Error sending message:", err));
         } else {
-            // Template message - check for placeholders
             if (!selectedTemplate) return alert("Please select a template");
 
             const template = templates.find(t => t.name === selectedTemplate);
             if (!template) return;
 
+            setSelectedTemplateData(template);
+
             if (template.placeholders && template.placeholders.length > 0) {
-                // Show dialog for placeholders
                 setShowPlaceholderDialog(true);
             } else {
-                // No placeholders, send directly
                 sendTemplateMessage(selectedTemplate, {});
             }
         }
@@ -250,33 +305,53 @@ export default function ChatHistoryTable() {
 
     // ---------------------- Send Template Message ----------------------
     const sendTemplateMessage = (templateName: string, placeholders: Record<string, string>) => {
-        fetch("http://localhost:3000/api/chats/send-template", {
+        const template = templates.find(t => t.name === templateName);
+        if (!template) return;
+
+        // CHANGE 2: Build payload with buttons array
+        const payload: any = {
+            agent_id: AGENT_ID,
+            customer_name: name,
+            mobile_no: number,
+            templateName: templateName, // Changed from templateName
+            language: template.language,
+            category: template.category,
+        };
+
+        // Add placeholders if they exist
+        if (Object.keys(placeholders).length > 0) {
+            payload.placeholders = placeholders;
+        }
+
+        // CHANGE 2: Add buttons array if they exist
+        if (template.buttons && template.buttons.length > 0) {
+            payload.buttons = template.buttons;
+        }
+
+        console.log("Sending template with payload:", payload);
+
+        fetch(apiUrl + "/send-template", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                agent_id: AGENT_ID,
-                customer_name: name,
-                mobile_no: number,
-                template_name: templateName,
-                placeholders: placeholders,
-            }),
-        });
-
-
-        setName("");
-        setNumber("");
-        setSelectedTemplate("");
-        setPlaceholderValues({});
-        setShowPlaceholderDialog(false);
+            body: JSON.stringify(payload),
+        })
+        .then(() => {
+            fetchHistory();
+            setName("");
+            setNumber("");
+            setSelectedTemplate("");
+            setPlaceholderValues({});
+            setShowPlaceholderDialog(false);
+            setSelectedTemplateData(null);
+        })
+        .catch(err => console.error("Error sending template:", err));
     };
 
     // ---------------------- Handle Placeholder Submit ----------------------
     const handlePlaceholderSubmit = () => {
-        const template = templates.find(t => t.name === selectedTemplate);
-        if (!template) return;
+        if (!selectedTemplateData) return;
 
-        // Check all placeholders are filled
-        const allFilled = template.placeholders.every(p => placeholderValues[p]?.trim());
+        const allFilled = selectedTemplateData.placeholders.every(p => placeholderValues[p]?.trim());
         if (!allFilled) return alert("Please fill all placeholder values");
 
         sendTemplateMessage(selectedTemplate, placeholderValues);
@@ -296,7 +371,6 @@ export default function ChatHistoryTable() {
 
     return (
         <div className="p-4 space-y-4">
-
             {/* ---------------------- SEND MESSAGE UI ---------------------- */}
             <div className="bg-white shadow-sm p-4 rounded-sm space-y-4">
                 <div className="grid grid-cols-3 gap-4">
@@ -306,9 +380,10 @@ export default function ChatHistoryTable() {
                         onChange={(e) => setName(e.target.value)}
                     />
                     <Input
-                        placeholder="Phone Number"
+                        placeholder="Phone Number (10 digits)"
                         value={number}
                         onChange={(e) => setNumber(e.target.value)}
+                        maxLength={10}
                     />
 
                     <Select value={messageType} onValueChange={(val: "text" | "template") => {
@@ -321,12 +396,11 @@ export default function ChatHistoryTable() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="text">Text Message</SelectItem>
-                            {/* <SelectItem value="template">Template Message</SelectItem> */}
+                            <SelectItem value="template">Template Message</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
-                {/* Conditional rendering based on message type */}
                 <div className="grid grid-cols-1 gap-4">
                     {messageType === "text" ? (
                         <Textarea
@@ -337,19 +411,64 @@ export default function ChatHistoryTable() {
                             className="resize-none"
                         />
                     ) : (
-                        <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                            <SelectTrigger className="h-10">
-                                <SelectValue placeholder="Select Template" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {templates.map((t) => (
-                                    <SelectItem key={t.name} value={t.name}>
-                                        {t.name} ({t.language})
-                                        {t.placeholders.length > 0 && ` - ${t.placeholders.length} variables`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="space-y-2">
+                            <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                                <SelectTrigger className="h-10">
+                                    <SelectValue placeholder="Select Template" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {templates.map((t) => (
+                                        <SelectItem key={t.name} value={t.name}>
+                                            <div className="flex items-center gap-2">
+                                                <span>{t.name}</span>
+                                                <span className="text-xs text-gray-500">({t.language})</span>
+                                                {t.placeholders.length > 0 && (
+                                                    <span className="text-xs text-blue-600">
+                                                        {t.placeholders.length} vars
+                                                    </span>
+                                                )}
+                                                {t.buttons.length > 0 && (
+                                                    <span className="text-xs text-purple-600">
+                                                        {t.buttons.length} buttons
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            
+                            {/* CHANGE 3: Show button names in template info */}
+                            {selectedTemplate && (
+                                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                                    <div className="flex items-start gap-2">
+                                        <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-blue-900">
+                                                Template: {selectedTemplate}
+                                            </p>
+                                            {templates.find(t => t.name === selectedTemplate)?.placeholders.length! > 0 && (
+                                                <p className="text-blue-700">
+                                                    This template requires {templates.find(t => t.name === selectedTemplate)?.placeholders.length} variable(s)
+                                                </p>
+                                            )}
+                                            {templates.find(t => t.name === selectedTemplate)?.buttons.length! > 0 && (
+                                                <div className="text-blue-700">
+                                                    <p className="font-medium">Interactive buttons:</p>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {templates.find(t => t.name === selectedTemplate)?.buttons.map((btn, idx) => (
+                                                            <span key={idx} className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+                                                                {btn.text}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 
@@ -358,7 +477,7 @@ export default function ChatHistoryTable() {
                     className="bg-green-100 text-green-800 hover:bg-green-200 w-full"
                     onClick={sendMessage}
                 >
-                    <Send />
+                    <Send size={16} />
                     Send {messageType === "text" ? "Message" : "Template"}
                 </Button>
             </div>
@@ -367,17 +486,17 @@ export default function ChatHistoryTable() {
             <Dialog open={showPlaceholderDialog} onOpenChange={setShowPlaceholderDialog}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Fill Template Placeholders</DialogTitle>
+                        <DialogTitle>Fill Template Variables</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
-                        {templates.find(t => t.name === selectedTemplate)?.placeholders.map((placeholder) => (
+                        {selectedTemplateData?.placeholders.map((placeholder, index) => (
                             <div key={placeholder} className="space-y-2">
                                 <Label htmlFor={placeholder}>
-                                    {placeholder.replace(/_/g, " ").toUpperCase()}
+                                    Variable {index + 1} ({placeholder.replace(/_/g, " ")})
                                 </Label>
                                 <Input
                                     id={placeholder}
-                                    placeholder={`Enter ${placeholder}`}
+                                    placeholder={`Enter value for variable ${index + 1}`}
                                     value={placeholderValues[placeholder] || ""}
                                     onChange={(e) => setPlaceholderValues(prev => ({
                                         ...prev,
@@ -393,6 +512,7 @@ export default function ChatHistoryTable() {
                             onClick={() => {
                                 setShowPlaceholderDialog(false);
                                 setPlaceholderValues({});
+                                setSelectedTemplateData(null);
                             }}
                         >
                             Cancel
@@ -443,7 +563,6 @@ export default function ChatHistoryTable() {
                     </TableBody>
                 </Table>
 
-                {/* ---------------------- PAGINATION CONTROLS ---------------------- */}
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                     <div className="text-sm text-gray-600">
                         Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}

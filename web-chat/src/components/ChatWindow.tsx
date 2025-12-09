@@ -13,11 +13,13 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 
 export const ChatWindow = () => {
-  const { chats, activeChats, activateTab, deactivateTab } = useChatStore();
+  const { chats, activeChats, activateTab, deactivateTab, fetchMessages } =
+    useChatStore();
+
   const { isMinimized, minimize, width, height } = useUIStore();
 
   // ---------------------------
-  // FIXED: selected chat state
+  // Selected chat state
   // ---------------------------
   const [selectedChatId, setSelectedChatId] = useState(activeChats[0] || "");
 
@@ -27,9 +29,28 @@ export const ChatWindow = () => {
     }
   }, [activeChats]);
 
+  // --------------------------------------------------
+  // 🚀 INTERVAL LOGIC — RUNS FETCH FOR CURRENT CHAT
+  // --------------------------------------------------
+  useEffect(() => {
+    if (!selectedChatId) return;
 
-  
-  const windowRef:any = useRef<HTMLDivElement>(null);
+    console.log(" START interval for chat:", selectedChatId);
+
+    const intervalId = setInterval(() => {
+      console.log("⟳ Fetching messages for:", selectedChatId);
+      fetchMessages(selectedChatId);
+    }, 10000);
+
+    return () => {
+      console.log(" CLEAR interval for chat:", selectedChatId);
+      clearInterval(intervalId);
+    };
+  }, [selectedChatId]); // runs again when chat changes
+
+  // --------------------------------------------------
+
+  const windowRef: any = useRef<HTMLDivElement>(null);
   const { handleMouseDown: handleResize } = useResize(windowRef);
   const { handleDragStart } = useDrag(windowRef);
 
@@ -94,7 +115,10 @@ export const ChatWindow = () => {
 
       <MessageList chat={selectedChat} />
 
-      <ChatInput chatId={selectedChat.id} mobile_no={selectedChat.mobile_no} />
+      <ChatInput
+        chatId={selectedChat.id}
+        mobile_no={selectedChat.mobile_no}
+      />
 
       {/* ------------------- RESIZER ------------------- */}
       <div

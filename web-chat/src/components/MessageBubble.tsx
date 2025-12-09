@@ -30,17 +30,23 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
       )
     }
 
+ 
+
+
     return (
       <a
         href={message.fileUrl}
         target="_blank"
-        className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border mt-1 hover:bg-gray-100"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border mt-1 text-blue-400 hover:shadow hover:bg-teal-400"
       >
         <FileIcon size={18} />
-        <span className="text-sm font-medium">
+        <span className="text-sm font-medium truncate">
           {message.fileName || "Download File"}
         </span>
       </a>
+
+
     )
   }
 
