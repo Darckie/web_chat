@@ -12,7 +12,8 @@ export interface Message {
   agent_id?: string | null;
   [key: string]: any;
   fileName?: string
-  errorMessage?: string
+  errorMessage?: string,
+  activity?:string
 }
 
 export interface Chat {
@@ -24,8 +25,9 @@ export interface Chat {
   lastSeen: number;
   messages: Message[];
   isTyping: boolean;
-  customer_name:string
-  agentid:string
+  customer_name:string;
+  agentid:string;
+  session_id:string
 }
 
 // export type Message = {

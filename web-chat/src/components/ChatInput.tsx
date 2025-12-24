@@ -1,13 +1,24 @@
+
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, X, File as FileIcon, Image as ImageIcon, Paperclip, FileText } from "lucide-react";
+import {
+  Send,
+  X,
+  File as FileIcon,
+  Image as ImageIcon,
+  FileText,
+  Paperclip,
+  MessageSquareShare,
+} from "lucide-react";
 import { useChatStore } from "../store/chatStore";
 import { useAuthStore } from "../store/auth";
 
 interface ChatInputProps {
   chatId: string;
   mobile_no: string;
+  sessionClosed: boolean
 }
 
 type TemplateButton = {
@@ -24,9 +35,16 @@ type TemplateInfo = {
   category: string;
 };
 
+type AgentInfo = {
+  id: string;
+  name: string;
+  level: string;
+  // add more fields if your API returns them
+};
+
 const apiUrl = import.meta.env.VITE_API_URL;
 
-export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
+export const ChatInput = ({ chatId, mobile_no, sessionClosed }: ChatInputProps) => {
   const [message, setMessage] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -37,6 +55,14 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null);
   const [showPlaceholderDialog, setShowPlaceholderDialog] = useState(false);
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
+
+  // Agent transfer states
+  const [showAgentsMenu, setShowAgentsMenu] = useState(false);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, sendTemplateMessage, chats } = useChatStore();
@@ -74,7 +100,6 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
                 placeholders = extractPlaceholders(t.raw.structure.body.text);
               }
 
-              // CHANGE: Extract buttons from raw.structure.buttons
               if (t.raw?.structure?.buttons && Array.isArray(t.raw.structure.buttons)) {
                 buttons = t.raw.structure.buttons;
               }
@@ -83,8 +108,8 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
                 name: t.name,
                 language: t.language,
                 status: t.raw?.status || t.status || "UNKNOWN",
-                placeholders: placeholders,
-                buttons: buttons, // Now correctly extracted
+                placeholders,
+                buttons,
                 category: t.category || "MARKETING",
               };
             });
@@ -94,7 +119,7 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
             setTemplates([]);
           }
         })
-        .catch(err => {
+        .catch((err) => {
           console.error("Error fetching templates:", err);
           setTemplates([]);
         });
@@ -102,6 +127,49 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
 
     fetchTemplates();
   }, []);
+
+  // ---------------- FETCH AGENTS ----------------
+  const fetchAgents = async () => {
+    try {
+      setAgentsLoading(true);
+      setAgentsError(null);
+      setSelectedAgentId(null);
+
+      const agentId = useAuthStore.getState().agentId;
+
+      const res = await fetch(apiUrl + "/agent-list", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agent_id: agentId,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to load agents");
+      }
+
+      const data = await res.json();
+
+      const list: AgentInfo[] = (data.data || []).map((a: any) => ({
+        id: a.agent_id,
+        name: a.agent_id,          // backend doesn't send name
+        level: a.as_agent_level,
+      }));
+
+      setAgents(list);
+
+    } catch (err: any) {
+      console.error("Error fetching agents:", err);
+      setAgentsError(err.message || "Error loading agents");
+      setAgents([]);
+    } finally {
+      setAgentsLoading(false);
+    }
+  };
+
 
   // ---------------- SEND TEXT ----------------
   const handleSendText = () => {
@@ -150,16 +218,14 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
   const handleTemplateSelect = (template: TemplateInfo) => {
     setSelectedTemplate(template);
     setShowTemplateMenu(false);
-    
-    // Show template name in input field
     setMessage(`📄 Template: ${template.name}`);
-
-    // If template has placeholders, we'll show dialog on send click
-    // Otherwise it will be sent directly on send click
   };
 
   // ---------------- SEND TEMPLATE ----------------
-  const handleSendTemplate = async (template: TemplateInfo, placeholders: Record<string, string>) => {
+  const handleSendTemplate = async (
+    template: TemplateInfo,
+    placeholders: Record<string, string>
+  ) => {
     try {
       await sendTemplateMessage(chatId, {
         template_name: template.name,
@@ -172,12 +238,10 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
         agent_id: agentId,
       });
 
-      // Reset states
       setSelectedTemplate(null);
       setPlaceholderValues({});
       setShowPlaceholderDialog(false);
       setMessage("");
-
     } catch (error) {
       console.error("Error sending template:", error);
     }
@@ -187,8 +251,9 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
   const handlePlaceholderSubmit = () => {
     if (!selectedTemplate) return;
 
-    // Check all placeholders are filled
-    const allFilled = selectedTemplate.placeholders.every(p => placeholderValues[p]?.trim());
+    const allFilled = selectedTemplate.placeholders.every(
+      (p) => placeholderValues[p]?.trim()
+    );
     if (!allFilled) {
       alert("Please fill all placeholder values");
       return;
@@ -199,6 +264,7 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
 
   // ---------------- PICK FILE ----------------
   const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -210,11 +276,9 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
   const handleSendClick = () => {
     // Priority: Template > File > Text
     if (selectedTemplate) {
-      // Check if template has placeholders
       if (selectedTemplate.placeholders.length > 0) {
         setShowPlaceholderDialog(true);
       } else {
-        // No placeholders, send directly
         handleSendTemplate(selectedTemplate, {});
       }
     } else if (selectedFile) {
@@ -239,17 +303,85 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
     inputRef.current?.focus();
   };
 
+  // ---------------- OPEN/CLOSE AGENTS MENU ----------------
+  const handleToggleAgentsMenu = async () => {
+    setShowAgentsMenu((prev) => {
+      const next = !prev;
+      if (next) {
+        // opening → load agents
+        fetchAgents();
+      }
+      return next;
+    });
+  };
+
+  // ---------------- CONFIRM TRANSFER ----------------
+  const handleConfirmTransfer = async () => {
+    if (!selectedAgentId) {
+      alert("Please select an agent to transfer.");
+      return;
+    }
+
+    try {
+      setIsTransferring(true);
+
+      // POST transfer API – adjust URL/body to your backend
+      const res = await fetch(apiUrl + "/transfer-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: chat?.session_id,
+          from_agent_id: agentId,
+          to_agent_id: selectedAgentId,
+          mobile_no,
+        }),
+      });
+
+
+
+      if (!res.ok) {
+        throw new Error("Transfer failed");
+      }
+
+
+      window.location.reload();
+
+
+
+      setShowAgentsMenu(false);
+      setSelectedAgentId(null);
+    } catch (err) {
+      console.error("Error transferring chat:", err);
+      alert("Failed to transfer chat. Please try again.");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
   return (
     <>
-      <div className="relative flex items-end gap-2 p-3 bg-white border-t border-gray-200">
+      <div className="relative flex items-end gap-1 px-1 py-2 bg-white border-t border-gray-200">
         {/* PAPERCLIP BUTTON WITH DROPDOWN */}
         <div className="relative">
           <button
             onClick={() => setShowMenu((p) => !p)}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600"
-            disabled={!!selectedTemplate}
+            className="rounded-full hover:bg-gray-100 transition-colors text-gray-600"
+            disabled={!!selectedTemplate || sessionClosed}
           >
+            
             <Paperclip size={20} />
+          </button>
+
+          {/* AGENT TRANSFER BUTTON */}
+          <button
+            onClick={handleToggleAgentsMenu}
+            disabled={sessionClosed}
+            className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600"
+            title="Transfer chat"
+          >
+            <MessageSquareShare size={20} />
           </button>
 
           {showMenu && (
@@ -261,15 +393,112 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
               </label>
             </div>
           )}
+
+          {/* AGENT TRANSFER MENU */}
+          {showAgentsMenu && (
+            <div className="absolute left-0 bottom-12 bg-white shadow-lg rounded-md border w-72 max-h-96 overflow-y-auto z-50">
+              <div className="p-2 border-b bg-gray-50 font-semibold text-sm flex justify-between items-center">
+                <span>Transfer to agent</span>
+                <button
+                  className="text-xs text-gray-500 hover:text-red-500"
+                  onClick={() => setShowAgentsMenu(false)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="p-2 space-y-2">
+                {agentsLoading && (
+                  <div className="text-sm text-gray-500">Loading agents...</div>
+                )}
+
+                {agentsError && (
+                  <div className="text-sm text-red-500">{agentsError}</div>
+                )}
+
+                {!agentsLoading && !agentsError && agents.length === 0 && (
+                  <div className="text-sm text-gray-500">No agents available</div>
+                )}
+
+                {!agentsLoading &&
+                  !agentsError &&
+                  agents.length > 0 && (
+                    <>
+                      <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                        {agents.map((agent) => {
+                          const selected = selectedAgentId === agent.id;
+
+                          return (
+                            <button
+                              key={agent.id}
+                              onClick={() => setSelectedAgentId(agent.id)}
+                              className={`
+          w-full flex items-center justify-between
+          px-3 py-2 rounded-md text-sm border
+          transition-all duration-150
+          ${selected
+                                  ? "border-blue-500 bg-blue-50 text-blue-900"
+                                  : "border-gray-200 hover:bg-gray-100 text-gray-800"
+                                }
+        `}
+                            >
+                              {/* Agent Name */}
+                              <span className="font-medium truncate">
+                                {agent.name}
+                              </span>
+
+                              {/* Agent Level Badge */}
+                              {agent.level && (
+                                <span
+                                  className={`
+              ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold
+              ${selected
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-gray-200 text-gray-700"
+                                    }
+            `}
+                                >
+                                  {agent.level || 'NA'}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+
+                      <div className="pt-2 flex justify-end gap-2 border-t mt-2">
+                        <button
+                          onClick={() => {
+                            setShowAgentsMenu(false);
+                            setSelectedAgentId(null);
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmTransfer}
+                          disabled={!selectedAgentId || isTransferring}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {isTransferring ? "Transferring..." : "Transfer"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* TEMPLATE BUTTON */}
         <div className="relative">
           <button
             onClick={() => setShowTemplateMenu((p) => !p)}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600"
+            className="rounded-full hover:bg-gray-100 transition-colors text-gray-600"
             title="Send Template"
-            disabled={!!selectedFile}
+            disabled={!!selectedFile || sessionClosed}
           >
             <FileText size={20} />
           </button>
@@ -313,7 +542,7 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
           )}
         </div>
 
-        {/* FILE PREVIEW (IF SELECTED) */}
+        {/* FILE PREVIEW */}
         {selectedFile && (
           <div className="absolute bottom-16 left-3 right-3 bg-white shadow-md p-3 rounded-lg border flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -332,13 +561,15 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
           </div>
         )}
 
-        {/* TEMPLATE PREVIEW (IF SELECTED) */}
+        {/* TEMPLATE PREVIEW */}
         {selectedTemplate && (
           <div className="absolute bottom-16 left-3 right-3 bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText size={18} className="text-blue-600" />
               <div>
-                <span className="text-sm font-medium text-blue-900">{selectedTemplate.name}</span>
+                <span className="text-sm font-medium text-blue-900">
+                  {selectedTemplate.name}
+                </span>
                 {selectedTemplate.placeholders.length > 0 && (
                   <span className="text-xs text-blue-700 ml-2">
                     ({selectedTemplate.placeholders.length} variables required)
@@ -348,6 +579,7 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
             </div>
 
             <button onClick={clearTemplateSelection}>
+
               <X size={18} className="text-blue-500 hover:text-red-500" />
             </button>
           </div>
@@ -358,23 +590,27 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
           ref={inputRef}
           type="text"
           placeholder={
-            selectedFile 
-              ? "Ready to send file..." 
-              : selectedTemplate 
-              ? `Template: ${selectedTemplate.name}` 
-              : "Type a message..."
+            selectedFile
+              ? "Ready to send file..."
+              : selectedTemplate
+                ? `Template: ${selectedTemplate.name}`
+                : "Type a message..."
           }
           value={message}
           disabled={!!selectedFile || !!selectedTemplate}
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
           className={`flex-1 px-4 py-2 rounded-full bg-gray-100 text-sm outline-none 
-            ${selectedFile || selectedTemplate ? "opacity-40 cursor-not-allowed" : "focus:ring-2 focus:ring-blue-500 focus:bg-white"}
+            ${selectedFile || selectedTemplate
+              ? "opacity-40 cursor-not-allowed"
+              : "focus:ring-2 focus:ring-blue-500 focus:bg-white"
+            }
             transition-all`}
         />
 
         {/* SEND BUTTON */}
         <button
+
           onClick={handleSendClick}
           disabled={!message.trim() && !selectedFile && !selectedTemplate}
           className="p-2 rounded-full transition-all disabled:opacity-50 hover:bg-blue-100"
@@ -389,7 +625,9 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-4 border-b">
               <h3 className="text-lg font-semibold">Fill Template Variables</h3>
-              <p className="text-sm text-gray-600 mt-1">Template: {selectedTemplate.name}</p>
+              <p className="text-sm text-gray-600 mt-1">
+                Template: {selectedTemplate.name}
+              </p>
             </div>
 
             <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
@@ -402,10 +640,12 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
                     type="text"
                     placeholder={`Enter value for variable ${index + 1}`}
                     value={placeholderValues[placeholder] || ""}
-                    onChange={(e) => setPlaceholderValues(prev => ({
-                      ...prev,
-                      [placeholder]: e.target.value
-                    }))}
+                    onChange={(e) =>
+                      setPlaceholderValues((prev) => ({
+                        ...prev,
+                        [placeholder]: e.target.value,
+                      }))
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -414,6 +654,7 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
 
             <div className="p-4 border-t flex justify-end gap-2">
               <button
+                disabled={sessionClosed}
                 onClick={() => {
                   setShowPlaceholderDialog(false);
                   setPlaceholderValues({});
@@ -423,6 +664,7 @@ export const ChatInput = ({ chatId, mobile_no }: ChatInputProps) => {
                 Cancel
               </button>
               <button
+                disabled={sessionClosed}
                 onClick={handlePlaceholderSubmit}
                 className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
               >

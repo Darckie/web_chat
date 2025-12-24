@@ -8,14 +8,16 @@ interface MessageBubbleProps {
 
 export const MessageBubble = ({ message }: MessageBubbleProps) => {
 
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
+
+  const formatTime = (isoString: string) => {
+    return new Date(isoString).toLocaleTimeString("en-US", {
+      hour: "numeric",
       minute: "2-digit",
       hour12: true,
-    })
-  }
+      timeZone: "UTC",
+    });
+  };
+
 
   const renderFile = () => {
     if (!message.fileUrl) return null
@@ -30,7 +32,7 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
       )
     }
 
- 
+
 
 
     return (
@@ -100,7 +102,24 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
 
           {/* TEXT */}
           {message.text && (
-            <p className="text-sm leading-relaxed mb-1">{message.text}</p>
+
+
+            <p className="text-sm leading-relaxed mb-1">
+
+              {message.text?.startsWith("https://www.google.com/maps/search") ? (
+                <a
+                  href={message.text}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open location 📍
+                </a>
+              ) : (
+                message.text
+              )}
+
+
+            </p>
           )}
 
           {/* FAILED LABEL */}
